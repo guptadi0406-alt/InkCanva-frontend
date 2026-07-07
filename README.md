@@ -121,7 +121,10 @@ git clone https://github.com/guptadi0406-alt/InkCanva.git
 
 Go to the project directory
 
+<<<<<<< HEAD
 `
+=======
+>>>>>>> adf8444fb1888e2a413c645676497418cb7c35bd
 
 Install dependencies
 
