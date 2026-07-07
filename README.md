@@ -116,14 +116,11 @@ frontend/
 Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/sketchflow.git
+git clone https://github.com/guptadi0406-alt/InkCanva.git
 ```
 
 Go to the project directory
 
-```bash
-cd sketchflow
-```
 
 Install dependencies
 
