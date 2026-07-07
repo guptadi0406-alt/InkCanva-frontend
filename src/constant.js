@@ -1,0 +1,45 @@
+
+
+
+const COLORS = {
+  BLACK: "#000000",
+  RED: "#ff0000",
+  GREEN: "#00ff00",
+  BLUE: "#0000ff",
+  ORANGE: "#ffa500",
+  YELLOW: "#ffff00",
+  WHITE: "#ffffff",
+};
+
+ const TOOL_ITEMS = {
+  BRUSH: "Brush",
+  LINE: "Line",
+  RECTANGLE: "Rectangle",
+  ELLIPSE: "Ellipse",
+  ARROW: "Arrow",
+  ERASER: "Eraser",
+  TEXT: "Text",
+};
+
+
+ const FILL_TOOL_TYPES = [TOOL_ITEMS.RECTANGLE, TOOL_ITEMS.ELLIPSE];
+ const STROKE_TOOL_TYPES = [
+  TOOL_ITEMS.BRUSH,
+  TOOL_ITEMS.LINE,
+  TOOL_ITEMS.ARROW,
+  TOOL_ITEMS.RECTANGLE,
+  TOOL_ITEMS.ELLIPSE,
+  TOOL_ITEMS.TEXT,
+];
+
+export const SIZE_TOOL_TYPES = [
+  TOOL_ITEMS.LINE,
+  TOOL_ITEMS.ARROW,
+  TOOL_ITEMS.RECTANGLE,
+  TOOL_ITEMS.CIRCLE,
+  TOOL_ITEMS.BRUSH,
+
+  TOOL_ITEMS.TEXT,
+];
+export const ELEMENT_ERASE_THRESHOLD = 0.1;
+export { COLORS,FILL_TOOL_TYPES,STROKE_TOOL_TYPES,TOOL_ITEMS};
