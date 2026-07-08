@@ -2,7 +2,7 @@
 
 > A modern, lightweight, and interactive whiteboard application inspired by Excalidraw, built with **React**, **HTML5 Canvas**, **Rough.js**, and **Perfect Freehand**.
 
-SketchFlow provides a smooth drawing experience with support for freehand sketching, geometric shapes, arrows, text, customizable colors, adjustable brush sizes, undo/redo functionality, and canvas export.
+InCanva provides a smooth drawing experience with support for freehand sketching, geometric shapes, arrows, text, customizable colors, adjustable brush sizes, undo/redo functionality, and canvas export.
 
 ---
 

@@ -1,9 +1,11 @@
-import { useReducer , useCallback } from "react";
+import { useReducer , useCallback ,useRef ,useEffect} from "react";
 import boardContext from "./board-context";
 
 import rough from "roughjs/bin/rough";
 import { createElement, getSvgPathFromStroke , isPointNearElement } from "../utils/element";
 import getStroke from "perfect-freehand";
+import {updateCanvasData, SOCKET_URL} from "../utils/api";
+import { io } from "socket.io-client";
 
 
  const gen = rough.generator();
@@ -62,7 +64,7 @@ const boardReducer = (state, action) => {
                             case "Arrow":   
                                  case "Ellipse":  
                                             {
-
+                                                if (!Elements[index]) return state;
                                                 const updatedElement = createElement(
                                                     Elements[index].id,
                                                     Elements[index].x1,
@@ -84,10 +86,12 @@ const boardReducer = (state, action) => {
                     case "Brush":
 
                             {
+                                if (!Elements[index]) return state;
+                                const points = Array.isArray(Elements[index].points) ? Elements[index].points : [];
                                 const updatedElement = {
                                     ...Elements[index],
-                                    points: [...Elements[index].points, { x: clientX, y: clientY }],
-                                    path: new Path2D(getSvgPathFromStroke(getStroke([...Elements[index].points, { x: clientX, y: clientY }], { size: Number(action.payload.size) }))),
+                                    points: [...points, { x: clientX, y: clientY }],
+                                    path: new Path2D(getSvgPathFromStroke(getStroke([...points, { x: clientX, y: clientY }], { size: Number(action.payload.size) }))),
                              
                                 }
                                 Elements[index] = updatedElement;
@@ -197,11 +201,87 @@ const boardReducer = (state, action) => {
                 }
             }
 
+        case "SET_USER_LOGIN_STATUS":
+            {
+               return {
+                   ...state,
+                   isUserLoggedIn: action.payload.isUserLoggedIn,
+               }
+
+            }
+
+        case "SET_CANVAS_ID":
+            {
+                return {
+                    ...state,
+                    canvasId: action.payload.canvasId,
+                };
+            }
+        case "SET_HISTORY":
+            {
+                 return {
+                     ...state,
+                     history: [action.payload.elements],
+                    };
+            }
+
+        case "SET_CANVAS_ELEMENTS":
+            {
+                return {
+                    ...state,
+                    elements: action.payload.elements,
+                };
+            }
+        case "SET_INITIAL_ELEMENTS":
+            {
+                return {
+                    ...state,
+                    elements: action.payload.elements,
+                    history: [action.payload.elements], 
+                };
+            }
+
+        case "SET_ELEMENTS_FROM_SOCKET":
+        {
+            const { elements, isFinal } = action.payload;
+            const updatedElements = elements.map(el => {
+                if (el.type === "brush") {
+                    return {
+                        ...el,
+                        path: new Path2D(getSvgPathFromStroke(getStroke(el.points, { size: Number(el.size) })))
+                    };
+                }
+                if (el.type === "text") {
+                    return el;
+                }
+                return createElement(el.id, el.x1, el.y1, el.x2, el.y2, {
+                    type: el.type,
+                    stroke: el.stroke,
+                    fill: el.fill,
+                    size: el.size,
+                });
+            });
+            if (isFinal) {
+                return {
+                    ...state,
+                    elements: updatedElements,
+                    history: [...state.history.slice(0, state.index + 1), updatedElements],
+                    index: state.index + 1
+                };
+            } else {
+                return {
+                    ...state,
+                    elements: updatedElements
+                };
+            }
+        }
 
         default:
             return state;
     }
 }
+
+const isUserLoggedIn = !!localStorage.getItem("whiteboard_user_token");
 
 const initialBoardState = {
     active: "Brush",
@@ -209,6 +289,8 @@ const initialBoardState = {
     history:[[]],
     index:0,
     toolActionType: "NONE",
+    canvasId: "",
+    isUserLoggedIn: isUserLoggedIn,
 }
 
 
@@ -216,7 +298,48 @@ const initialBoardState = {
 const BoardProvider = ({children}) => {
 
     const [boardState, dispatchBoardAction] = useReducer(boardReducer, initialBoardState);
+
+
+    const socketRef = useRef(null);
+
+   useEffect(() => {
+        
+        socketRef.current = io(SOCKET_URL, {
+        withCredentials: true,
+        });
+
+
+        if (boardState.canvasId) {
+        socketRef.current.emit("join-room", boardState.canvasId);
+        }
+
+        socketRef.current.on("canvas-update", (data) => {
+            dispatchBoardAction({ type: "SET_ELEMENTS_FROM_SOCKET", payload: data });
+        });
+
+
+        return () => {
+            socketRef.current.disconnect();
+        };
+
+    },[boardState.canvasId]);
+
+    useEffect(() => {
    
+            if (
+                socketRef.current && 
+                boardState.canvasId && 
+                (boardState.toolActionType === "DRAWING" || boardState.toolActionType === "ERASING")
+            ) {
+                socketRef.current.emit("canvas-update", {
+                    canvasId: boardState.canvasId,
+                    elements: boardState.elements,
+                    isFinal: false
+                });
+            }
+    }, [boardState.elements, boardState.canvasId, boardState.toolActionType]);
+
+
 
         const handleTool = (tool) => {
         dispatchBoardAction({ type: "CHANGE_TOOL", payload: {tool} });
@@ -256,13 +379,38 @@ const BoardProvider = ({children}) => {
         const boardUndoHandler = useCallback(() => {
 
             dispatchBoardAction({ type: "UNDO", payload: {} });
-        }, []);
+
+            const newIndex = Math.max(boardState.index - 1, 0);
+            const updatedElements = boardState.history[newIndex];
+            updateCanvasData(boardState.canvasId, updatedElements);
+
+            if (socketRef.current) {
+                socketRef.current.emit("canvas-update", {
+                    canvasId: boardState.canvasId,
+                    elements: updatedElements,
+                    isFinal: true
+                });
+            }
+        }, [boardState]);
 
 
         const boardRedoHandler = useCallback(() => {
 
             dispatchBoardAction({ type: "REDO", payload: {} });
-        }, []);
+
+            const newIndex = Math.min(boardState.index + 1, boardState.history.length - 1);
+            const updatedElements = boardState.history[newIndex];
+            updateCanvasData(boardState.canvasId, updatedElements);
+
+            if (socketRef.current) {
+                socketRef.current.emit("canvas-update", {
+                    canvasId: boardState.canvasId,
+                    elements: updatedElements,
+                    isFinal: true
+                });
+            }
+
+        }, [boardState]);
 
         const handleMouseMoveHandler = (event,stroke,fill,size) => {
             if(boardState.toolActionType === "WRITING") return;
@@ -296,24 +444,123 @@ const BoardProvider = ({children}) => {
 
             if(boardState.toolActionType == "DRAWING"){
 
+                const allelems = boardState.elements;
+                const canvasId = boardState.canvasId; 
                 dispatchBoardAction({ type: "SAVE_HISTORY", payload: {} });
                 dispatchBoardAction({ type: "DRAW_UP", payload: {} });
 
 
+                    updateCanvasData(canvasId, allelems)
+                    .then((data) => {
+                        console.log("Canvas updated successfully:", data);
+                    })
+                    .catch((error) => {
+                        console.error("Error updating canvas:", error);
+                    });
+
+                if (socketRef.current) {
+                    socketRef.current.emit("canvas-update", {
+                        canvasId,
+                        elements: allelems,
+                        isFinal: true
+                    });
+                }
+
             }else if(boardState.toolActionType == "ERASING"){
+
                 dispatchBoardAction({ type: "CHANGE_TOOL_ACTION_TYPE", payload: { toolActionType: "NONE" } });
+                const canvasId = boardState.canvasId; 
+                const allelems = boardState.elements;
+                updateCanvasData(canvasId, allelems)
+                    .then((data) => {
+                        console.log("Canvas updated successfully:", data);
+                    })
+                    .catch((error) => {
+                        console.error("Error updating canvas:", error);
+                    });
+
+                if (socketRef.current) {
+                    socketRef.current.emit("canvas-update", {
+                        canvasId,
+                        elements: allelems,
+                        isFinal: true
+                    });
+                }
             }
         }
 
 
-        const textAreaBlurHandler = (text,stroke,size) => {
-           
-            dispatchBoardAction({ type: "CHANGE_TEXT", payload: { text: text,stroke,size } });
+        const textAreaBlurHandler = (text, stroke, size) => {
+            dispatchBoardAction({ type: "CHANGE_TEXT", payload: { text, stroke, size } });
+
+         
+            setTimeout(() => {
+                const canvasId = boardState.canvasId;
+                const Elements = [...boardState.elements];
+                const index = Elements.length - 1;
+                if (index >= 0) {
+                  
+                    const updatedElements = Elements.map((el, i) =>
+                        i === index ? { ...el, text, stroke, size } : el
+                    );
+                    updateCanvasData(canvasId, updatedElements)
+                        .then(() => {
+                            
+                            if (socketRef.current) {
+                                socketRef.current.emit("canvas-update", {
+                                    canvasId,
+                                    elements: updatedElements,
+                                    isFinal: true
+                                });
+                            }
+                        })
+                        .catch((err) => console.error("Error saving text:", err));
+                }
+            }, 0);
         }
+
+
+        const setUserLoginStatus = (isUserLoggedIn) => {
+            dispatchBoardAction({
+                type: "SET_USER_LOGIN_STATUS",
+                payload: {
+                    isUserLoggedIn,
+                },
+            })
+        }
+
+        const setCanvasId = (canvasId) => {
+            dispatchBoardAction({
+                type: "SET_CANVAS_ID",
+                payload: {
+                    canvasId,
+                },
+                });
+        }
+
+        const setHistory = () => {
+            dispatchBoardAction({
+                type: "SET_HISTORY",
+                payload: {
+                    elements: boardState.elements,
+                },
+            });
+        }
+
+        const setElements = (elements) => {
+            dispatchBoardAction({
+                type: "SET_CANVAS_ELEMENTS",
+                payload: {
+                    elements,
+                },
+            });
+        }
+
 
     const value = {
         active: boardState.active,
         elements: boardState.elements,
+        canvasId: boardState.canvasId,
         handleTool,
         handleMouseDownHandler,
         handleMouseMoveHandler,
@@ -321,7 +568,13 @@ const BoardProvider = ({children}) => {
         textAreaBlurHandler,
         boardUndoHandler,
         boardRedoHandler,
-        toolActionType: boardState.toolActionType
+        setUserLoginStatus,
+        isUserLoggedIn: boardState.isUserLoggedIn,
+        toolActionType: boardState.toolActionType,
+        setCanvasId, 
+        setHistory,
+        setElements,
+
     }
 
     return (

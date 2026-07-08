@@ -2,7 +2,10 @@ import { createContext } from "react";
 
 
 const boardContext = createContext({
+    isUserLoggedIn: false,
+    setUserLoginStatus: () => {},
     active:"",
+    canvasId: "", 
     elements:[],
     history:[[]],
     index:0,
@@ -12,8 +15,11 @@ const boardContext = createContext({
     handleTool:()=>{},
     handleMouseUpHandler:()=>{},
     textAreaBlurHandler:()=>{},
-   boardUndoHandler:()=>{},
-    boardRedoHandler:()=>{}
+    boardUndoHandler:()=>{},
+    boardRedoHandler:()=>{},
+    setCanvasId:()=>{},
+    setHistory:()=>{},
+    setElements:()=>{},
 });
 
 export default boardContext;

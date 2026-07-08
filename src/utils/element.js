@@ -9,7 +9,8 @@ export const  createElement = (id,x1, y1, x2, y2, {type,stroke,fill,size}) => {
     const gen = rough.generator();
 
 
-    const element = { id, x1, y1, x2, y2, type };
+    const element = { id, x1, y1, x2, y2, type, stroke, fill, size };
+
     let options = {
         seed : id+1,
         stroke: stroke,
